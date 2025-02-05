@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daily Trade Journal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      background-color: #fff;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+    input[type="number"], input[type="date"], select {
+      padding: 4px;
+    }
+    textarea {
+      width: 100%;
+      padding: 4px;
+    }
+    .pair-container {
+      margin-bottom: 40px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      background-color: #fff;
+    }
+    .btn {
+      padding: 10px 16px;
+      font-size: 16px;
+      background-color: #28a745;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin: 10px 5px 10px 0;
+    }
+    .btn:hover {
+      background-color: #218838;
+    }
+    #historyContainer {
+      margin-top: 40px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Daily Trade Journal</h1>
+
+  <!-- Date and Market Overview -->
+  <p><strong>Date:</strong>
+    <input type="date" id="tradeDate"/>
+  </p>
+  <p><strong>Market Overview / Major News:</strong></p>
+  <textarea id="marketOverview" rows="4" placeholder="Enter market notes..."></textarea>
+
+  <!-- Journal will be generated here -->
+  <div id="journal"></div>
+
+  <!-- Action Buttons -->
+  <button class="btn" onclick="calculateTotals()">Calculate Totals</button>
+  <button class="btn" onclick="saveData()">Save Data</button>
+  <button class="btn" onclick="showHistory()">View History</button>
+
+  <!-- Overall Daily Summary -->
+  <h2>Overall Daily Summary</h2>
+  <div id="overallSummary">
+    <p><strong>Total Number of Trades:</strong> <span id="totalTrades">0</span></p>
+    <p><strong>Total Winning Trades:</strong> <span id="winningTrades">0</span></p>
+    <p><strong>Total Losing Trades:</strong> <span id="losingTrades">0</span></p>
+    <p><strong>Cumulative Daily P/L:</strong> <span id="cumulativePL">0</span></p>
+  </div>
+
+  <!-- History Section (Hidden by Default) -->
+  <div id="historyContainer" class="hidden">
+    <h2>Previous Journal Entries</h2>
+    <div id="historyData"></div>
+  </div>
+
+  <script>
+    // 1. List of all pairs
+    const pairs = [
+      "EURUSD",
+      "GBPUSD",
+      "GBPJPY",
+      "NZDJPY",
+      "ETHUSD",
+      "XAUUSD",
+      "NAS100",
+      "BTCUSD",
+      "NZDUSD",
+      "EURAUD",
+      "USDCAD",
+      "AUDUSD",
+      "USDCHF",
+      "GBPAUD"
+    ];
+
+    // 2. Generate the journal tables for each pair
+    function generateJournal() {
+      const journalDiv = document.getElementById("journal");
+      let content = "";
+
+      pairs.forEach(pair => {
+        content += `
+          <div class="pair-container">
+            <h2>${pair}</h2>
+            <table id="table-${pair}">
+              <thead>
+                <tr>
+                  <th>Trade #</th>
+                  <th>Direction</th>
+                  <th>Entry</th>
+                  <th>Stop Loss</th>
+                  <th>Take Profit</th>
+                  <th>Exit Price</th>
+                  <th>Position Size</th>
+                  <th>P/L</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+        for (let i = 1; i <= 4; i++) {
+          content += `
+                <tr>
+                  <td>${i}</td>
+                  <td>
+                    <select class="direction">
+                      <option value="">Select</option>
+                      <option value="Long">Long</option>
+                      <option value="Short">Short</option>
+                    </select>
+                  </td>
+                  <td><input type="number" class="entry" step="any" /></td>
+                  <td><input type="number" class="stoploss" step="any" /></td>
+                  <td><input type="number" class="takeprofit" step="any" /></td>
+                  <td><input type="number" class="exit" step="any" /></td>
+                  <td><input type="number" class="positionsize" step="any" /></td>
+                  <td><input type="number" class="pl" step="any" /></td>
+                  <td><input type="text" class="notes" /></td>
+                </tr>`;
+        }
+
+        content += `
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7"><strong>Total ${pair} P/L</strong></td>
+                  <td colspan="2">
+                    <input type="number" id="total-${pair}" readonly style="width:90px;" />
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>`;
+      });
+
+      journalDiv.innerHTML = content;
+    }
+
+    // 3. Calculate daily totals for each pair + overall summary
+    function calculateTotals() {
+      let cumulativePL = 0;
+      let totalTrades = 0;
+      let winningTrades = 0;
+      let losingTrades = 0;
+
+      pairs.forEach(pair => {
+        const table = document.getElementById("table-" + pair);
+        const plInputs = table.querySelectorAll("input.pl");
+        let pairTotal = 0;
+
+        plInputs.forEach(input => {
+          const value = parseFloat(input.value) || 0;
+          pairTotal += value;
+
+          if (input.value !== "") {
+            totalTrades++;
+            if (value > 0) {
+              winningTrades++;
+            } else if (value < 0) {
+              losingTrades++;
+            }
+          }
+        });
+
+        cumulativePL += pairTotal;
+        document.getElementById("total-" + pair).value = pairTotal.toFixed(2);
+      });
+
+      document.getElementById("totalTrades").innerText = totalTrades;
+      document.getElementById("winningTrades").innerText = winningTrades;
+      document.getElementById("losingTrades").innerText = losingTrades;
+      document.getElementById("cumulativePL").innerText = cumulativePL.toFixed(2);
+    }
+
+    // 4. Save the day's data to localStorage
+    function saveData() {
+      // Ensure we have a date
+      const tradeDate = document.getElementById("tradeDate").value;
+      if (!tradeDate) {
+        alert("Please select a date before saving.");
+        return;
+      }
+
+      // Build an object for today's journal
+      const marketOverview = document.getElementById("marketOverview").value;
+      let dailyData = {
+        date: tradeDate,
+        marketOverview: marketOverview,
+        pairs: []
+      };
+
+      // Gather each pair's data
+      pairs.forEach(pair => {
+        const table = document.getElementById("table-" + pair);
+        const rows = table.querySelectorAll("tbody tr");
+        let trades = [];
+
+        rows.forEach(row => {
+          const direction = row.querySelector(".direction").value;
+          const entry = parseFloat(row.querySelector(".entry").value) || 0;
+          const stoploss = parseFloat(row.querySelector(".stoploss").value) || 0;
+          const takeprofit = parseFloat(row.querySelector(".takeprofit").value) || 0;
+          const exit = parseFloat(row.querySelector(".exit").value) || 0;
+          const positionsize = parseFloat(row.querySelector(".positionsize").value) || 0;
+          const pl = parseFloat(row.querySelector(".pl").value) || 0;
+          const notes = row.querySelector(".notes").value;
+
+          // Only push if there's at least a direction or entry (to avoid empty rows)
+          if (direction || entry !== 0 || exit !== 0) {
+            trades.push({
+              direction,
+              entry,
+              stoploss,
+              takeprofit,
+              exit,
+              positionsize,
+              pl,
+              notes
+            });
+          }
+        });
+
+        // Pair total
+        const pairTotalPL = parseFloat(document.getElementById("total-" + pair).value) || 0;
+
+        dailyData.pairs.push({
+          pairName: pair,
+          pairTotalPL: pairTotalPL,
+          trades: trades
+        });
+      });
+
+      // Load existing journal data from localStorage
+      let allJournalData = JSON.parse(localStorage.getItem("allJournalData")) || [];
+
+      // Remove any existing entry for this date (so we overwrite)
+      allJournalData = allJournalData.filter(entry => entry.date !== tradeDate);
+
+      // Add the new daily data
+      allJournalData.push(dailyData);
+
+      // Save back to localStorage
+      localStorage.setItem("allJournalData", JSON.stringify(allJournalData));
+
+      alert("Your journal data has been saved!");
+    }
+
+    // 5. Show the history of previous days
+    function showHistory() {
+      const historyContainer = document.getElementById("historyContainer");
+      const historyDataDiv = document.getElementById("historyData");
+
+      // Toggle visibility
+      historyContainer.classList.toggle("hidden");
+
+      // If now visible, load the data
+      if (!historyContainer.classList.contains("hidden")) {
+        let allJournalData = JSON.parse(localStorage.getItem("allJournalData")) || [];
+
+        if (allJournalData.length === 0) {
+          historyDataDiv.innerHTML = "<p>No previous journal entries found.</p>";
+          return;
+        }
+
+        // Sort by date descending (optional)
+        allJournalData.sort((a, b) => (a.date < b.date ? 1 : -1));
+
+        // Build HTML
+        let historyHTML = "";
+        allJournalData.forEach(entry => {
+          historyHTML += `
+            <div style="border:1px solid #ccc; margin-bottom:10px; padding:10px;">
+              <h3>Date: ${entry.date}</h3>
+              <p><strong>Market Overview:</strong> ${entry.marketOverview || ""}</p>
+              <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+                <thead>
+                  <tr style="background-color:#f0f0f0;">
+                    <th>Pair</th>
+                    <th>Pair Total P/L</th>
+                    <th>Trades</th>
+                  </tr>
+                </thead>
+                <tbody>`;
+
+          entry.pairs.forEach(p => {
+            // Build trades table
+            let tradesHTML = "<table style='width:100%; border:1px solid #ccc;'>";
+            tradesHTML += `
+              <tr style="background-color:#f9f9f9;">
+                <th>Direction</th>
+                <th>Entry</th>
+                <th>SL</th>
+                <th>TP</th>
+                <th>Exit</th>
+                <th>Pos.Size</th>
+                <th>P/L</th>
+                <th>Notes</th>
+              </tr>`;
+            p.trades.forEach(t => {
+              tradesHTML += `
+                <tr>
+                  <td>${t.direction}</td>
+                  <td>${t.entry}</td>
+                  <td>${t.stoploss}</td>
+                  <td>${t.takeprofit}</td>
+                  <td>${t.exit}</td>
+                  <td>${t.positionsize}</td>
+                  <td>${t.pl}</td>
+                  <td>${t.notes}</td>
+                </tr>`;
+            });
+            tradesHTML += "</table>";
+
+            historyHTML += `
+              <tr>
+                <td>${p.pairName}</td>
+                <td>${p.pairTotalPL}</td>
+                <td>${tradesHTML}</td>
+              </tr>`;
+          });
+
+          historyHTML += `
+                </tbody>
+              </table>
+            </div>`;
+        });
+
+        historyDataDiv.innerHTML = historyHTML;
+      }
+    }
+
+    // Initialize journal on page load
+    window.onload = generateJournal;
+  </script>
+</body>
+</html>
